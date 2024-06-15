@@ -1,46 +1,45 @@
 import locale
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
-DECODING_ORDER = [
-    "windows-1250",
-    "windows-1251",
-    "windows-1252",
-    "windows-1253",
-    "windows-1254",
-    "utf-8",
-]
-SYMBOLS_WHEN_ENCODING_UTF8_AS_WIN1250 = [
-    "Ĺş",
-    "ĹĽ",
-    "Ĺ‚",
-    "Ĺ›",
-    "Ä‡",
-    "Ä…",
-    "Ä™",
-    "Ăł",
-    "Ĺ„",
-]
-POLISH_DIACRITICS = ["ź", "ż", "ł", "ś", "ć", "ą", "ę", "ó", "ń"]
-CHECK_IN_WORD_COUNT = 1000
+import chardet
+
+DECODING_ORDER = ["utf-16", "windows-1250", "windows-1251", "windows-1252", "windows-1253", "windows-1254", "utf-8"]
+CHECK_NUM_CHARS = 5000
+AUTO_DETECT_THRESHOLD = 0.9
 
 
-def _diacritics_count_in_word(word: str) -> int:
-    return len([pd for pd in POLISH_DIACRITICS if pd.lower() in word.lower()])
+def _is_ascii(c: str) -> bool:
+    return ord(c) < 128
 
 
-def _err_symbol_count_in_word(word: str) -> int:
-    return len([err_sym for err_sym in SYMBOLS_WHEN_ENCODING_UTF8_AS_WIN1250 if err_sym.lower() in word.lower()])
+def _is_polish_diacritic(c: str) -> bool:
+    return c in "ąćęłńóśżźĄĆĘŁŃÓŚŻŹ"
 
 
 def _is_correct_encoding(subs: str) -> bool:
     err_symbols, diacritics = 0, 0
-    for word in subs.split()[:CHECK_IN_WORD_COUNT]:
-        diacritics += _diacritics_count_in_word(word)
-        err_symbols += _err_symbol_count_in_word(word)
+    for char in subs[:CHECK_NUM_CHARS]:
+        if _is_polish_diacritic(char):
+            diacritics += 1
+        elif not _is_ascii(char):
+            err_symbols += 1
+
     return err_symbols < diacritics
 
 
+def _detect_encoding(subs: bytes) -> Tuple[Optional[str], float]:
+    result = chardet.detect(subs)
+    return result["encoding"], result["confidence"]
+
+
 def _try_decode(subs: bytes) -> Tuple[str, str]:
+    encoding, confidence = _detect_encoding(subs)
+    if encoding and confidence > AUTO_DETECT_THRESHOLD:
+        try:
+            return encoding, subs.decode(encoding)
+        except UnicodeDecodeError:
+            pass
+
     last_exc = None
     for i, enc in enumerate(DECODING_ORDER):
         try:
