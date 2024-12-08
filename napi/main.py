@@ -78,6 +78,8 @@ def main(
             else:
                 log.error("Napiprojekt.pl does not have subtitles for this movie")
                 exit(EXIT_SUBS_NOT_FOUND)
+        except FileNotFoundError:
+            log.error("No `7zr` command found - install 7zip first")
         except Exception as e:
             traceback.print_exc()
             log.error(e)
